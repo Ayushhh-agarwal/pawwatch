@@ -5,6 +5,7 @@ build/
 *.err
 /.swiftpm/
 .build/
+.idea/
 assets/*.png
 assets/*.jpg
 assets/*.jpeg
