@@ -56,6 +56,15 @@ Privacy: Agent Pets does not call network APIs. It reads local process metadata,
 
 Trademark note: product names belong to their owners. The repository does not bundle third-party product logos; add local image overrides if you want branded icons on your machine.
 
+## Implementation Notes
+
+- Scans run on AppKit's main thread. The per-process metadata cache is main-thread only.
+- New agent processes may trigger local `lsof`, `git`, and agent-state reads once; metadata is cached by pid after that.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## License
 
 MIT

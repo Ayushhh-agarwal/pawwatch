@@ -59,6 +59,7 @@ final class AgentScanner {
         let sessionTitle: String
     }
 
+    // Scans currently run on AppKit's main thread; move this behind an actor/lock if scanning moves off-thread.
     private var metaByPid: [Int: AgentMeta] = [:]
 
     private let kinds: [AgentKind] = [
@@ -125,11 +126,13 @@ final class AgentScanner {
     ]
 
     func scan() -> [AgentInfo] {
-        agents(from: psRows())
+        assert(Thread.isMainThread, "AgentScanner cache is main-thread only")
+        return agents(from: psRows())
     }
 
     func parsePSOutput(_ output: String) -> [ProcRow] {
-        output.split(separator: "\n").compactMap { line in
+        var rows: [ProcRow] = []
+        for line in output.split(separator: "\n") {
             let fields = line.split(
                 maxSplits: 6,
                 omittingEmptySubsequences: true,
@@ -140,9 +143,10 @@ final class AgentScanner {
                   let ppid = Int(fields[1]),
                   let cpu = Double(String(fields[3]))
             else {
-                return nil
+                debugLog("Could not parse ps row: \(line)")
+                continue
             }
-            return ProcRow(
+            rows.append(ProcRow(
                 pid: pid,
                 ppid: ppid,
                 stat: String(fields[2]),
@@ -150,8 +154,9 @@ final class AgentScanner {
                 tty: String(fields[4]),
                 runtime: String(fields[5]),
                 command: String(fields[6])
-            )
+            ))
         }
+        return rows
     }
 
     func agents(from rows: [ProcRow]) -> [AgentInfo] {
@@ -371,6 +376,12 @@ final class AgentScanner {
         return String(data: data, encoding: .utf8)
     }
 
+    private func debugLog(_ message: String) {
+        #if DEBUG
+        fputs("AgentPets: \(message)\n", stderr)
+        #endif
+    }
+
     private func owningApp(for row: ProcRow, byPid: [Int: ProcRow]) -> (pid: Int, name: String) {
         if let name = appName(from: row.command) {
             return (row.pid, name)
@@ -559,8 +570,7 @@ final class PetsView: NSView {
             }
             return
         }
-        let index = Int((point.y - 6) / Self.rowHeight)
-        guard agents.indices.contains(index) else {
+        guard let index = agentIndex(at: point) else {
             return
         }
         if terminateButtonRect(for: index).contains(point) {
@@ -590,8 +600,7 @@ final class PetsView: NSView {
             onEmptyClick?(point)
             return
         }
-        let index = Int((point.y - 6) / Self.rowHeight)
-        guard agents.indices.contains(index) else {
+        guard let index = agentIndex(at: point) else {
             return
         }
         onClick?(agents[index], point)
@@ -610,6 +619,17 @@ final class PetsView: NSView {
     private func cancelPendingClick() {
         pendingClick?.cancel()
         pendingClick = nil
+    }
+
+    private func agentIndex(at point: NSPoint) -> Int? {
+        guard point.y >= 6 else {
+            return nil
+        }
+        let index = Int((point.y - 6) / Self.rowHeight)
+        guard agents.indices.contains(index), cardRect(for: index).contains(point) else {
+            return nil
+        }
+        return index
     }
 
     override func resetCursorRects() {
@@ -631,9 +651,7 @@ final class PetsView: NSView {
         }
 
         for (index, agent) in agents.enumerated() {
-            let y = CGFloat(index) * Self.rowHeight + 6
-            let card = NSRect(x: 8, y: y, width: bounds.width - 16, height: Self.rowHeight - 8)
-            drawCard(agent, in: card)
+            drawCard(agent, in: cardRect(for: index))
             drawTerminateButton(in: terminateButtonRect(for: index))
             if index == 0 {
                 drawToggleButton("-", in: toggleButtonRect())
@@ -735,6 +753,10 @@ final class PetsView: NSView {
 
     private func toggleButtonRect() -> NSRect {
         NSRect(x: bounds.width - (isCompact ? 37 : 64), y: 14, width: 22, height: 22)
+    }
+
+    private func cardRect(for index: Int) -> NSRect {
+        NSRect(x: 8, y: CGFloat(index) * Self.rowHeight + 6, width: bounds.width - 16, height: Self.rowHeight - 8)
     }
 
     private func terminateButtonRect(for index: Int) -> NSRect {
