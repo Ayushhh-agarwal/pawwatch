@@ -997,21 +997,15 @@ final class AgentOverlayController: NSObject {
         image.lockFocus()
         NSColor.black.setFill()
 
-        let leftEar = NSBezierPath()
-        leftEar.move(to: NSPoint(x: 4, y: 11))
-        leftEar.line(to: NSPoint(x: 6, y: 15))
-        leftEar.line(to: NSPoint(x: 8, y: 11))
-        leftEar.close()
-        leftEar.fill()
-
-        let rightEar = NSBezierPath()
-        rightEar.move(to: NSPoint(x: 10, y: 11))
-        rightEar.line(to: NSPoint(x: 12, y: 15))
-        rightEar.line(to: NSPoint(x: 14, y: 11))
-        rightEar.close()
-        rightEar.fill()
-
-        NSBezierPath(roundedRect: NSRect(x: 3, y: 4, width: 12, height: 10), xRadius: 3, yRadius: 3).fill()
+        [
+            NSRect(x: 2.2, y: 9.5, width: 3.8, height: 4.8),
+            NSRect(x: 5.8, y: 12.0, width: 4.0, height: 5.0),
+            NSRect(x: 9.2, y: 12.0, width: 4.0, height: 5.0),
+            NSRect(x: 12.8, y: 9.5, width: 3.8, height: 4.8),
+            NSRect(x: 4.2, y: 2.5, width: 9.6, height: 8.8),
+        ].forEach { rect in
+            NSBezierPath(ovalIn: rect).fill()
+        }
         image.unlockFocus()
         image.isTemplate = true
         return image
