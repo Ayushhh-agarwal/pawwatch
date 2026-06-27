@@ -5,3 +5,8 @@ build/
 *.err
 /.swiftpm/
 .build/
+assets/*.png
+assets/*.jpg
+assets/*.jpeg
+assets/*.heic
+assets/*.webp
