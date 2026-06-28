@@ -16,6 +16,15 @@ Detected by default: Claude Code, Codex, Gemini, Aider, OpenCode, Goose, Cursor 
 open build/AgentPets.app
 ```
 
+`build.sh` creates an ad-hoc signed app. It is not Apple-notarized yet, so macOS may block the first launch. If that happens, right-click `AgentPets.app`, choose `Open`, then confirm `Open`.
+
+For a GitHub release asset:
+
+```bash
+./build.sh
+ditto -c -k --sequesterRsrc --keepParent build/AgentPets.app AgentPets-macOS.zip
+```
+
 ## Usage
 
 Click a pet to see only that agent's actions, Claude Code session title when available, copy its repo path, or copy its process command.
