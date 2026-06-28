@@ -16,6 +16,15 @@ Detected by default: Claude Code, Codex, Gemini, Aider, OpenCode, Goose, Cursor 
 open build/AgentPets.app
 ```
 
+`build.sh` creates an ad-hoc signed app. It is not Apple-notarized yet, so macOS may block the first launch. If that happens, right-click `AgentPets.app`, choose `Open`, then confirm `Open`.
+
+For a GitHub release asset:
+
+```bash
+./build.sh
+ditto -c -k --sequesterRsrc --keepParent build/AgentPets.app AgentPets-macOS.zip
+```
+
 ## Usage
 
 Click a pet to see only that agent's actions, Claude Code session title when available, copy its repo path, or copy its process command.
@@ -55,6 +64,15 @@ Metadata shown locally:
 Privacy: Agent Pets does not call network APIs. It reads local process metadata, git metadata, and local agent state files where available.
 
 Trademark note: product names belong to their owners. The repository does not bundle third-party product logos; add local image overrides if you want branded icons on your machine.
+
+## Implementation Notes
+
+- Scans run on AppKit's main thread. The per-process metadata cache is main-thread only.
+- New agent processes may trigger local `lsof`, `git`, and agent-state reads once; metadata is cached by pid after that.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
