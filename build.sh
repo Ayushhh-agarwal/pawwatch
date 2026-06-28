@@ -2,8 +2,8 @@
 set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
-APP="$DIR/build/AgentPets.app"
-BIN="$APP/Contents/MacOS/AgentPets"
+APP="$DIR/build/PawWatch.app"
+BIN="$APP/Contents/MacOS/PawWatch"
 
 mkdir -p "$APP/Contents/MacOS"
 mkdir -p "$APP/Contents/Resources"
@@ -21,15 +21,15 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleDisplayName</key>
-  <string>Agent Pets</string>
+  <string>PawWatch</string>
   <key>CFBundleExecutable</key>
-  <string>AgentPets</string>
+  <string>PawWatch</string>
   <key>CFBundleIdentifier</key>
-  <string>local.agentpets</string>
+  <string>io.github.ayushhhagarwal.pawwatch</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>Agent Pets</string>
+  <string>PawWatch</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleSignature</key>

@@ -230,7 +230,7 @@ final class AgentScanner {
           201     1 S      4.2 ?? 03:04 /Applications/Codex.app/Contents/MacOS/Codex
           202   201 S      0.1 ?? 03:04 /Applications/Codex.app/Contents/Frameworks/Codex Helper.app/Contents/MacOS/Codex Helper --type=renderer
           301     1 S      0.5 ttys002 05:06 /opt/homebrew/bin/gemini
-          401     1 S      0.0 ?? 00:01 /Users/me/agent-pets/build/AgentPets.app/Contents/MacOS/AgentPets
+          401     1 S      0.0 ?? 00:01 /Users/me/pawwatch/build/PawWatch.app/Contents/MacOS/PawWatch
         """)
         let agents = scanner.agents(from: rows)
         assert(agents.count == 3)
@@ -378,7 +378,7 @@ final class AgentScanner {
 
     private func debugLog(_ message: String) {
         #if DEBUG
-        fputs("AgentPets: \(message)\n", stderr)
+        fputs("PawWatch: \(message)\n", stderr)
         #endif
     }
 
@@ -430,7 +430,9 @@ final class AgentScanner {
     }
 
     private func isNoise(_ lower: String) -> Bool {
-        lower.contains("agentpets")
+        lower.contains("pawwatch")
+            || lower.contains("agentpets")
+            || lower.contains("/pawwatch/")
             || lower.contains("/agent-pets/")
             || lower.contains("claude-tracker")
             || lower.contains("crashpad_handler")
@@ -817,6 +819,7 @@ final class PetsView: NSView {
 
     private func assetPaths(for name: String) -> [String] {
         let roots = [
+            NSHomeDirectory() + "/pawwatch/assets",
             NSHomeDirectory() + "/agent-pets/assets",
             Bundle.main.resourcePath.map { $0 + "/assets" } ?? "",
         ].filter { !$0.isEmpty }
@@ -918,10 +921,10 @@ final class AgentOverlayController: NSObject {
     private let petsView = PetsView(frame: .zero)
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let statusMenu = NSMenu()
-    private let originXKey = "AgentPetsOriginX"
-    private let originYKey = "AgentPetsOriginY"
-    private let compactKey = "AgentPetsCompact"
-    private let hiddenKey = "AgentPetsHidden"
+    private let originXKey = "PawWatchOriginX"
+    private let originYKey = "PawWatchOriginY"
+    private let compactKey = "PawWatchCompact"
+    private let hiddenKey = "PawWatchHidden"
     private var userOrigin: NSPoint?
     private var isCompact = false
     private var isHidden = false
@@ -987,7 +990,7 @@ final class AgentOverlayController: NSObject {
         petsView.tick += 1
         petsView.agents = agents
         petsView.isCompact = isCompact
-        statusItem.button?.toolTip = isHidden ? "Agent Pets hidden" : (agents.isEmpty ? "No agent flows" : "\(agents.count) agent flows")
+        statusItem.button?.toolTip = isHidden ? "PawWatch hidden" : (agents.isEmpty ? "No agent flows" : "\(agents.count) agent flows")
         guard !isHidden else {
             panel.orderOut(nil)
             return
@@ -1132,7 +1135,7 @@ final class AgentOverlayController: NSObject {
         let reset = NSMenuItem(title: "Reset Position", action: #selector(resetPosition), keyEquivalent: "0")
         reset.target = self
         menu.addItem(reset)
-        let quit = NSMenuItem(title: "Quit Agent Pets", action: #selector(quit), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "Quit PawWatch", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
     }

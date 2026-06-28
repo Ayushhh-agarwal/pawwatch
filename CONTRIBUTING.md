@@ -1,12 +1,12 @@
 # Contributing
 
-Thanks for improving Agent Pets.
+Thanks for improving PawWatch.
 
 ## Build
 
 ```bash
 ./build.sh
-open build/AgentPets.app
+open build/PawWatch.app
 ```
 
 ## Add an Agent Detector
@@ -24,7 +24,7 @@ Then run:
 
 ```bash
 ./build.sh
-build/AgentPets.app/Contents/MacOS/AgentPets --list
+build/PawWatch.app/Contents/MacOS/PawWatch --list
 ```
 
 ## Icons
