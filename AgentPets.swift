@@ -177,7 +177,10 @@ final class AgentScanner {
             let descendants = descendants(of: row.pid, children: children)
             let usefulDescendants = descendants.filter { !isNoise($0.command.lowercased()) }
             let totalCpu = row.cpu + usefulDescendants.reduce(0) { $0 + $1.cpu }
-            let state = state(stat: row.stat, totalCpu: totalCpu, hasToolChild: !usefulDescendants.isEmpty)
+            let lowerCommand = row.command.lowercased()
+            let state = kind.name == "Codex" && isCodexDesktop(lowerCommand)
+                ? "completed"
+                : state(stat: row.stat, totalCpu: totalCpu, hasToolChild: !usefulDescendants.isEmpty)
             let meta = cachedMeta(for: row.pid, kind: kind)
             let owner = owningApp(for: row, byPid: byPid)
             return AgentInfo(
@@ -248,6 +251,7 @@ final class AgentScanner {
         """))
         assert(desktopOnly.count == 1)
         assert(desktopOnly[0].name == "Codex")
+        assert(desktopOnly[0].state == "completed")
         print("self-test ok")
     }
 
