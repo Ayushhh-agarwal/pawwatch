@@ -473,7 +473,7 @@ final class AgentScanner {
             return "paused"
         }
         if stat.contains("Z") {
-            return "ended"
+            return "completed"
         }
         if hasToolChild || totalCpu >= 3 {
             return "working"
@@ -901,16 +901,14 @@ final class PetsView: NSView {
 
     private func stateColor(_ state: String) -> NSColor {
         switch state {
-        case "working":
-            return .systemGreen
         case "waiting for permission":
-            return .systemYellow
-        case "paused":
-            return .systemOrange
-        case "ended":
             return .systemRed
+        case "completed", "ended":
+            return .systemGreen
+        case "working", "idle":
+            return .systemYellow
         default:
-            return .systemGray
+            return .systemYellow
         }
     }
 }

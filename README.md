@@ -54,6 +54,7 @@ State is inferred locally:
 - `working`: the agent has a live child tool process, or CPU is active.
 - `waiting for permission`: the agent process has light CPU activity but no live tool child.
 - `idle`: the agent exists but is quiet.
+- status light: red means waiting for permission, yellow means working or idle, green means completed.
 
 Metadata shown locally:
 
