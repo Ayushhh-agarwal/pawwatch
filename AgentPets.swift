@@ -179,7 +179,7 @@ final class AgentScanner {
             let totalCpu = row.cpu + usefulDescendants.reduce(0) { $0 + $1.cpu }
             let lowerCommand = row.command.lowercased()
             let state = kind.name == "Codex" && isCodexDesktop(lowerCommand)
-                ? "completed"
+                ? codexDesktopState(stat: row.stat, totalCpu: totalCpu)
                 : state(stat: row.stat, totalCpu: totalCpu, hasToolChild: !usefulDescendants.isEmpty)
             let meta = cachedMeta(for: row.pid, kind: kind)
             let owner = owningApp(for: row, byPid: byPid)
@@ -252,6 +252,10 @@ final class AgentScanner {
         assert(desktopOnly.count == 1)
         assert(desktopOnly[0].name == "Codex")
         assert(desktopOnly[0].state == "completed")
+        let busyDesktop = scanner.agents(from: scanner.parsePSOutput("""
+          201     1 S     12.0 ?? 03:04 /Applications/Codex.app/Contents/MacOS/Codex
+        """))
+        assert(busyDesktop[0].state == "working")
         print("self-test ok")
     }
 
@@ -500,6 +504,16 @@ final class AgentScanner {
             return "waiting for permission"
         }
         return "idle"
+    }
+
+    private func codexDesktopState(stat: String, totalCpu: Double) -> String {
+        if stat.contains("T") {
+            return "paused"
+        }
+        if stat.contains("Z") {
+            return "completed"
+        }
+        return totalCpu >= 3 ? "working" : "completed"
     }
 }
 
