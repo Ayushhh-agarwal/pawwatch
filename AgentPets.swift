@@ -229,6 +229,7 @@ final class AgentScanner {
           102   101 S      0.0 ttys001 00:01 /bin/zsh -lc git status
           201     1 S      4.2 ?? 03:04 /Applications/Codex.app/Contents/MacOS/Codex
           202   201 S      0.1 ?? 03:04 /Applications/Codex.app/Contents/Frameworks/Codex Helper.app/Contents/MacOS/Codex Helper --type=renderer
+          203   201 S      0.1 ?? 03:04 /Applications/Codex.app/Contents/Resources/codex sandbox -- /Applications/Codex.app/Contents/Resources/cua_node/bin/node kernel.js
           301     1 S      0.5 ttys002 05:06 /opt/homebrew/bin/gemini
           401     1 S      0.0 ?? 00:01 /Users/me/pawwatch/build/PawWatch.app/Contents/MacOS/PawWatch
         """)
@@ -238,6 +239,7 @@ final class AgentScanner {
         assert(agents.contains { $0.name == "Codex" && $0.state == "working" })
         assert(agents.contains { $0.name == "Gemini" && $0.state == "waiting for permission" })
         assert(!agents.contains { $0.command.contains("Helper") })
+        assert(!agents.contains { $0.command.contains("/Codex.app/Contents/MacOS/Codex") })
         print("self-test ok")
     }
 
@@ -438,6 +440,7 @@ final class AgentScanner {
             || lower.contains("crashpad_handler")
             || lower.contains("bare-modifier-monitor")
             || lower.contains("codex app-server")
+            || lower.hasSuffix("/codex.app/contents/macos/codex")
             || lower.contains("codex (renderer)")
             || lower.contains("codex (service)")
             || lower.contains("skycomputeruse")
