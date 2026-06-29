@@ -170,7 +170,7 @@ final class AgentScanner {
         }
         metaByPid = metaByPid.filter { livePids.contains($0.key) }
 
-        return rows.compactMap { row in
+        let agents: [AgentInfo] = rows.compactMap { row in
             guard let kind = classify(row) else {
                 return nil
             }
@@ -197,12 +197,15 @@ final class AgentScanner {
                 runtime: row.runtime
             )
         }
-        .sorted { left, right in
-            if left.name == right.name {
-                return left.pid < right.pid
+        let hasCodexWorker = agents.contains { $0.name == "Codex" && !isCodexDesktop($0.command.lowercased()) }
+        return agents
+            .filter { !hasCodexWorker || $0.name != "Codex" || !isCodexDesktop($0.command.lowercased()) }
+            .sorted { left, right in
+                if left.name == right.name {
+                    return left.pid < right.pid
+                }
+                return left.name < right.name
             }
-            return left.name < right.name
-        }
     }
 
     private func cachedMeta(for pid: Int, kind: AgentKind) -> AgentMeta {
@@ -240,6 +243,11 @@ final class AgentScanner {
         assert(agents.contains { $0.name == "Gemini" && $0.state == "waiting for permission" })
         assert(!agents.contains { $0.command.contains("Helper") })
         assert(!agents.contains { $0.command.contains("/Codex.app/Contents/MacOS/Codex") })
+        let desktopOnly = scanner.agents(from: scanner.parsePSOutput("""
+          201     1 S      4.2 ?? 03:04 /Applications/Codex.app/Contents/MacOS/Codex
+        """))
+        assert(desktopOnly.count == 1)
+        assert(desktopOnly[0].name == "Codex")
         print("self-test ok")
     }
 
@@ -440,7 +448,6 @@ final class AgentScanner {
             || lower.contains("crashpad_handler")
             || lower.contains("bare-modifier-monitor")
             || lower.contains("codex app-server")
-            || lower.hasSuffix("/codex.app/contents/macos/codex")
             || lower.contains("codex (renderer)")
             || lower.contains("codex (service)")
             || lower.contains("skycomputeruse")
@@ -455,6 +462,10 @@ final class AgentScanner {
             || lower.contains("/bin/ps -axo")
             || lower.contains(" swiftc ")
             || lower.contains("swift-frontend")
+    }
+
+    private func isCodexDesktop(_ lower: String) -> Bool {
+        lower.hasSuffix("/codex.app/contents/macos/codex")
     }
 
     private func descendants(of pid: Int, children: [Int: [ProcRow]]) -> [ProcRow] {
