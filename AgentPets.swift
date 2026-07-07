@@ -59,6 +59,7 @@ final class AgentScanner {
         let sessionTitle: String
     }
 
+    // Scans currently run on AppKit's main thread; move this behind an actor/lock if scanning moves off-thread.
     private var metaByPid: [Int: AgentMeta] = [:]
 
     private let kinds: [AgentKind] = [
@@ -125,11 +126,13 @@ final class AgentScanner {
     ]
 
     func scan() -> [AgentInfo] {
-        agents(from: psRows())
+        assert(Thread.isMainThread, "AgentScanner cache is main-thread only")
+        return agents(from: psRows())
     }
 
     func parsePSOutput(_ output: String) -> [ProcRow] {
-        output.split(separator: "\n").compactMap { line in
+        var rows: [ProcRow] = []
+        for line in output.split(separator: "\n") {
             let fields = line.split(
                 maxSplits: 6,
                 omittingEmptySubsequences: true,
@@ -140,9 +143,10 @@ final class AgentScanner {
                   let ppid = Int(fields[1]),
                   let cpu = Double(String(fields[3]))
             else {
-                return nil
+                debugLog("Could not parse ps row: \(line)")
+                continue
             }
-            return ProcRow(
+            rows.append(ProcRow(
                 pid: pid,
                 ppid: ppid,
                 stat: String(fields[2]),
@@ -150,8 +154,9 @@ final class AgentScanner {
                 tty: String(fields[4]),
                 runtime: String(fields[5]),
                 command: String(fields[6])
-            )
+            ))
         }
+        return rows
     }
 
     func agents(from rows: [ProcRow]) -> [AgentInfo] {
@@ -165,14 +170,17 @@ final class AgentScanner {
         }
         metaByPid = metaByPid.filter { livePids.contains($0.key) }
 
-        return rows.compactMap { row in
+        let agents: [AgentInfo] = rows.compactMap { row in
             guard let kind = classify(row) else {
                 return nil
             }
             let descendants = descendants(of: row.pid, children: children)
             let usefulDescendants = descendants.filter { !isNoise($0.command.lowercased()) }
             let totalCpu = row.cpu + usefulDescendants.reduce(0) { $0 + $1.cpu }
-            let state = state(stat: row.stat, totalCpu: totalCpu, hasToolChild: !usefulDescendants.isEmpty)
+            let lowerCommand = row.command.lowercased()
+            let state = kind.name == "Codex" && isCodexDesktop(lowerCommand)
+                ? codexDesktopState(stat: row.stat, totalCpu: totalCpu)
+                : state(stat: row.stat, totalCpu: totalCpu, hasToolChild: !usefulDescendants.isEmpty)
             let meta = cachedMeta(for: row.pid, kind: kind)
             let owner = owningApp(for: row, byPid: byPid)
             return AgentInfo(
@@ -192,12 +200,15 @@ final class AgentScanner {
                 runtime: row.runtime
             )
         }
-        .sorted { left, right in
-            if left.name == right.name {
-                return left.pid < right.pid
+        let hasCodexWorker = agents.contains { $0.name == "Codex" && !isCodexDesktop($0.command.lowercased()) }
+        return agents
+            .filter { !hasCodexWorker || $0.name != "Codex" || !isCodexDesktop($0.command.lowercased()) }
+            .sorted { left, right in
+                if left.name == right.name {
+                    return left.pid < right.pid
+                }
+                return left.name < right.name
             }
-            return left.name < right.name
-        }
     }
 
     private func cachedMeta(for pid: Int, kind: AgentKind) -> AgentMeta {
@@ -224,8 +235,9 @@ final class AgentScanner {
           102   101 S      0.0 ttys001 00:01 /bin/zsh -lc git status
           201     1 S      4.2 ?? 03:04 /Applications/Codex.app/Contents/MacOS/Codex
           202   201 S      0.1 ?? 03:04 /Applications/Codex.app/Contents/Frameworks/Codex Helper.app/Contents/MacOS/Codex Helper --type=renderer
+          203   201 S      0.1 ?? 03:04 /Applications/Codex.app/Contents/Resources/codex sandbox -- /Applications/Codex.app/Contents/Resources/cua_node/bin/node kernel.js
           301     1 S      0.5 ttys002 05:06 /opt/homebrew/bin/gemini
-          401     1 S      0.0 ?? 00:01 /Users/me/agent-pets/build/AgentPets.app/Contents/MacOS/AgentPets
+          401     1 S      0.0 ?? 00:01 /Users/me/pawwatch/build/PawWatch.app/Contents/MacOS/PawWatch
         """)
         let agents = scanner.agents(from: rows)
         assert(agents.count == 3)
@@ -233,6 +245,17 @@ final class AgentScanner {
         assert(agents.contains { $0.name == "Codex" && $0.state == "working" })
         assert(agents.contains { $0.name == "Gemini" && $0.state == "waiting for permission" })
         assert(!agents.contains { $0.command.contains("Helper") })
+        assert(!agents.contains { $0.command.contains("/Codex.app/Contents/MacOS/Codex") })
+        let desktopOnly = scanner.agents(from: scanner.parsePSOutput("""
+          201     1 S      4.2 ?? 03:04 /Applications/Codex.app/Contents/MacOS/Codex
+        """))
+        assert(desktopOnly.count == 1)
+        assert(desktopOnly[0].name == "Codex")
+        assert(desktopOnly[0].state == "completed")
+        let busyDesktop = scanner.agents(from: scanner.parsePSOutput("""
+          201     1 S     12.0 ?? 03:04 /Applications/Codex.app/Contents/MacOS/Codex
+        """))
+        assert(busyDesktop[0].state == "working")
         print("self-test ok")
     }
 
@@ -371,6 +394,12 @@ final class AgentScanner {
         return String(data: data, encoding: .utf8)
     }
 
+    private func debugLog(_ message: String) {
+        #if DEBUG
+        fputs("PawWatch: \(message)\n", stderr)
+        #endif
+    }
+
     private func owningApp(for row: ProcRow, byPid: [Int: ProcRow]) -> (pid: Int, name: String) {
         if let name = appName(from: row.command) {
             return (row.pid, name)
@@ -419,7 +448,9 @@ final class AgentScanner {
     }
 
     private func isNoise(_ lower: String) -> Bool {
-        lower.contains("agentpets")
+        lower.contains("pawwatch")
+            || lower.contains("agentpets")
+            || lower.contains("/pawwatch/")
             || lower.contains("/agent-pets/")
             || lower.contains("claude-tracker")
             || lower.contains("crashpad_handler")
@@ -441,6 +472,10 @@ final class AgentScanner {
             || lower.contains("swift-frontend")
     }
 
+    private func isCodexDesktop(_ lower: String) -> Bool {
+        lower.hasSuffix("/codex.app/contents/macos/codex")
+    }
+
     private func descendants(of pid: Int, children: [Int: [ProcRow]]) -> [ProcRow] {
         var result: [ProcRow] = []
         var seen: Set<Int> = []
@@ -460,7 +495,7 @@ final class AgentScanner {
             return "paused"
         }
         if stat.contains("Z") {
-            return "ended"
+            return "completed"
         }
         if hasToolChild || totalCpu >= 3 {
             return "working"
@@ -469,6 +504,16 @@ final class AgentScanner {
             return "waiting for permission"
         }
         return "idle"
+    }
+
+    private func codexDesktopState(stat: String, totalCpu: Double) -> String {
+        if stat.contains("T") {
+            return "paused"
+        }
+        if stat.contains("Z") {
+            return "completed"
+        }
+        return totalCpu >= 3 ? "working" : "completed"
     }
 }
 
@@ -559,8 +604,7 @@ final class PetsView: NSView {
             }
             return
         }
-        let index = Int((point.y - 6) / Self.rowHeight)
-        guard agents.indices.contains(index) else {
+        guard let index = agentIndex(at: point) else {
             return
         }
         if terminateButtonRect(for: index).contains(point) {
@@ -590,8 +634,7 @@ final class PetsView: NSView {
             onEmptyClick?(point)
             return
         }
-        let index = Int((point.y - 6) / Self.rowHeight)
-        guard agents.indices.contains(index) else {
+        guard let index = agentIndex(at: point) else {
             return
         }
         onClick?(agents[index], point)
@@ -610,6 +653,17 @@ final class PetsView: NSView {
     private func cancelPendingClick() {
         pendingClick?.cancel()
         pendingClick = nil
+    }
+
+    private func agentIndex(at point: NSPoint) -> Int? {
+        guard point.y >= 6 else {
+            return nil
+        }
+        let index = Int((point.y - 6) / Self.rowHeight)
+        guard agents.indices.contains(index), cardRect(for: index).contains(point) else {
+            return nil
+        }
+        return index
     }
 
     override func resetCursorRects() {
@@ -631,9 +685,7 @@ final class PetsView: NSView {
         }
 
         for (index, agent) in agents.enumerated() {
-            let y = CGFloat(index) * Self.rowHeight + 6
-            let card = NSRect(x: 8, y: y, width: bounds.width - 16, height: Self.rowHeight - 8)
-            drawCard(agent, in: card)
+            drawCard(agent, in: cardRect(for: index))
             drawTerminateButton(in: terminateButtonRect(for: index))
             if index == 0 {
                 drawToggleButton("-", in: toggleButtonRect())
@@ -737,6 +789,10 @@ final class PetsView: NSView {
         NSRect(x: bounds.width - (isCompact ? 37 : 64), y: 14, width: 22, height: 22)
     }
 
+    private func cardRect(for index: Int) -> NSRect {
+        NSRect(x: 8, y: CGFloat(index) * Self.rowHeight + 6, width: bounds.width - 16, height: Self.rowHeight - 8)
+    }
+
     private func terminateButtonRect(for index: Int) -> NSRect {
         NSRect(x: bounds.width - 25, y: CGFloat(index) * Self.rowHeight + 8, width: 12, height: 12)
     }
@@ -795,6 +851,7 @@ final class PetsView: NSView {
 
     private func assetPaths(for name: String) -> [String] {
         let roots = [
+            NSHomeDirectory() + "/pawwatch/assets",
             NSHomeDirectory() + "/agent-pets/assets",
             Bundle.main.resourcePath.map { $0 + "/assets" } ?? "",
         ].filter { !$0.isEmpty }
@@ -876,16 +933,14 @@ final class PetsView: NSView {
 
     private func stateColor(_ state: String) -> NSColor {
         switch state {
-        case "working":
-            return .systemGreen
         case "waiting for permission":
-            return .systemYellow
-        case "paused":
-            return .systemOrange
-        case "ended":
             return .systemRed
+        case "completed", "ended":
+            return .systemGreen
+        case "working", "idle":
+            return .systemYellow
         default:
-            return .systemGray
+            return .systemYellow
         }
     }
 }
@@ -896,10 +951,10 @@ final class AgentOverlayController: NSObject {
     private let petsView = PetsView(frame: .zero)
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let statusMenu = NSMenu()
-    private let originXKey = "AgentPetsOriginX"
-    private let originYKey = "AgentPetsOriginY"
-    private let compactKey = "AgentPetsCompact"
-    private let hiddenKey = "AgentPetsHidden"
+    private let originXKey = "PawWatchOriginX"
+    private let originYKey = "PawWatchOriginY"
+    private let compactKey = "PawWatchCompact"
+    private let hiddenKey = "PawWatchHidden"
     private var userOrigin: NSPoint?
     private var isCompact = false
     private var isHidden = false
@@ -965,7 +1020,7 @@ final class AgentOverlayController: NSObject {
         petsView.tick += 1
         petsView.agents = agents
         petsView.isCompact = isCompact
-        statusItem.button?.toolTip = isHidden ? "Agent Pets hidden" : (agents.isEmpty ? "No agent flows" : "\(agents.count) agent flows")
+        statusItem.button?.toolTip = isHidden ? "PawWatch hidden" : (agents.isEmpty ? "No agent flows" : "\(agents.count) agent flows")
         guard !isHidden else {
             panel.orderOut(nil)
             return
@@ -1110,7 +1165,7 @@ final class AgentOverlayController: NSObject {
         let reset = NSMenuItem(title: "Reset Position", action: #selector(resetPosition), keyEquivalent: "0")
         reset.target = self
         menu.addItem(reset)
-        let quit = NSMenuItem(title: "Quit Agent Pets", action: #selector(quit), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "Quit PawWatch", action: #selector(quit), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
     }

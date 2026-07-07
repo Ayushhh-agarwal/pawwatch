@@ -3,8 +3,8 @@ set -euo pipefail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 APP="$("$DIR/build.sh")"
-PLIST="$HOME/Library/LaunchAgents/local.agentpets.plist"
-LABEL="local.agentpets"
+PLIST="$HOME/Library/LaunchAgents/io.github.ayushhhagarwal.pawwatch.plist"
+LABEL="io.github.ayushhhagarwal.pawwatch"
 
 mkdir -p "$HOME/Library/LaunchAgents"
 cat > "$PLIST" <<PLIST
@@ -16,16 +16,16 @@ cat > "$PLIST" <<PLIST
   <string>$LABEL</string>
   <key>ProgramArguments</key>
   <array>
-    <string>$APP/Contents/MacOS/AgentPets</string>
+    <string>$APP/Contents/MacOS/PawWatch</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
   <true/>
   <key>StandardOutPath</key>
-  <string>/tmp/agentpets.out.log</string>
+  <string>/tmp/pawwatch.out.log</string>
   <key>StandardErrorPath</key>
-  <string>/tmp/agentpets.err.log</string>
+  <string>/tmp/pawwatch.err.log</string>
 </dict>
 </plist>
 PLIST
